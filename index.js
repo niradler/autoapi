@@ -32,22 +32,79 @@ const knex = Knex({
   });
 
 const handle = async (req, res) => {
-    var u = req.path.split('/').splice(1);
-   console.log(u)
-    switch (req.method) {
-        case "POST":
-            
-            break;
-            case "GET":
-            var r = await knex.select('*').from(u[0]).limit(100)
-            break;
-        default:
-            break;
+    let filter;
+    const table = req.params.table,_index=process.env.INDEX;
+    try {
+        const raw_tables = await(knex.raw(`SELECT tables.TABLE_NAME
+        FROM INFORMATION_SCHEMA.tables as tables
+        where tables.TABLE_SCHEMA = '${process.env.DB_NAME}'
+        order by tables.TABLE_NAME;`))
+        const tables = raw_tables[0].map((t)=>{
+            return t.TABLE_NAME
+        })
+        //console.log(tables,table)
+        if (tables.indexOf(table)==-1) {
+            return res.json({err:"table not exist!"})
+        }
+        if(req.query.filter){
+            filter = JSON.parse(req.query.filter) 
+        }
+        switch (req.method) {
+            case 'GET':
+            if (req.params.index) {
+                knex(table).where({[_index]:req.params.index}).select('*').then((r) => {
+                    console.log(r)
+                    return res.json(r.length==0 ? []:r[0]);
+                }).catch((err)=>{
+                    return res.json({errors:err});
+                }) 
+            }else{
+                if (filter) {
+                    knex(table).whereRaw(`${filter.field} ${filter.operator} '${filter.value}'`,[]).select('*').limit(1000).then((r) => {
+                        return res.json(r);
+                    }).catch((err)=>{
+                        return res.json({errors:err});
+                    }) 
+                } else {
+                    knex(table).select('*').limit(1000).then((r) => {
+                        return res.json(r);
+                    }).catch((err)=>{
+                        return res.json({errors:err});
+                    }) 
+                }
+              
+            }
+                break;
+                case 'PUT':
+                knex(table)
+                .where({
+                    [_index]: req.params.index
+                })
+                .update(req.body).then((r) => {
+                    return res.json(r)
+                }).catch((e) => {
+                    return res.json(e)
+                })
+                break;
+                case 'POST':
+                knex(table).insert(req.body).then((r) => {
+                    return res.json(r);
+                }).catch((e) => {
+                    return res.json(e);
+                })
+                break;
+            default:
+            return res.json({errors:"unknown method!"});
+                break;
+        }
+       
+    } catch (err) {
+        return res.json({errors:err});
     }
-return res.json(r)
-}
 
-app.use('/:table', handle)
+}
+app.all('/:table/:index', handle)
+app.all('/:table', handle)
 app.get('/', (req,res)=>{
     return res.send('auto api!')
     })
