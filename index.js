@@ -1,38 +1,14 @@
 const express = require('express')
 const app = express()
-const Knex = require('knex')
+const knex = require('./util').knex
 const bodyParser = require('body-parser')
 const env =require('dotenv').config();
-// parse application/json
+const _get = require('./methods/get')
+
 app.use(bodyParser.json())
-/*
-SELECT tables.TABLE_NAME
--- ,cols.COLUMN_NAME
-FROM INFORMATION_SCHEMA.tables as tables
--- left join INFORMATION_SCHEMA.COLUMNS as cols on cols.TABLE_SCHEMA = tables.TABLE_SCHEMA
-where tables.TABLE_SCHEMA = 'shelfmintdev2'
-order by tables.TABLE_NAME;
-*/
-const knex = Knex({
-    client: 'mysql',
-    connection: {
-      host : process.env.DB_HOST,
-      user : process.env.DB_USER,
-      password : process.env.DB_PASS,
-      database : process.env.DB_NAME,
-      typeCast: function(field, next) {
-        if (field.type == 'TINY' && field.length == 1) {
-            return (field.string() == '1'); // 1 = true, 0 = false
-        }else if(field.type == 'BIT' && field.length == 1){
-            return (field.string() == "\u0001"); // 1 = true, 0 = false  
-        }
-        return next();
-    }
-    }
-  });
 
 const handle = async (req, res) => {
-    let filter;
+    let filter=null;
     const table = req.params.table,_index=process.env.INDEX;
     try {
         const raw_tables = await(knex.raw(`SELECT tables.TABLE_NAME
@@ -51,29 +27,9 @@ const handle = async (req, res) => {
         }
         switch (req.method) {
             case 'GET':
-            if (req.params.index) {
-                knex(table).where({[_index]:req.params.index}).select('*').then((r) => {
-                    console.log(r)
-                    return res.json(r.length==0 ? []:r[0]);
-                }).catch((err)=>{
-                    return res.json({errors:err});
-                }) 
-            }else{
-                if (filter) {
-                    knex(table).whereRaw(`${filter.field} ${filter.operator} '${filter.value}'`,[]).select('*').limit(1000).then((r) => {
-                        return res.json(r);
-                    }).catch((err)=>{
-                        return res.json({errors:err});
-                    }) 
-                } else {
-                    knex(table).select('*').limit(1000).then((r) => {
-                        return res.json(r);
-                    }).catch((err)=>{
-                        return res.json({errors:err});
-                    }) 
-                }
-              
-            }
+            var r = await _get(table,req.params.index,filter);
+            let response=[]
+            res.json(response.length==0 ? []:response[0]);
                 break;
                 case 'PUT':
                 knex(table)
@@ -99,7 +55,8 @@ const handle = async (req, res) => {
         }
        
     } catch (err) {
-        return res.json({errors:err});
+        console.log('lib failed!',err)
+        return res.json({errors:err.message});
     }
 
 }
