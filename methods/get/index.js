@@ -1,8 +1,7 @@
 const knex = require('../../util').knex
 const env =require('dotenv').config();
-exports = async (table,index,filter)=>{
+ const get = async (table,index,filter)=>{
     try {
-    console.log('knex',knex);
     const _index=process.env.INDEX,_limit = process.env.LIMIT ?process.env.LIMIT:1000;
     let response = [];
     
@@ -14,12 +13,13 @@ exports = async (table,index,filter)=>{
             } else {
                 response = await knex(table).select('*').limit(_limit)
             }
-          
-        }  
+        }
+        return response;  
     } catch (error) {
         console.log(error)
-        response = error;
+        return error;
     }
 
-    return response;
+    
 }
+module.exports =get;
